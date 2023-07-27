@@ -12,7 +12,7 @@ import requests
 
 # Create your views here.
 
-# Configura tus credenciales de Shopify
+# Configuración de credenciales de Shopify
 API_KEY = '2363d7a7df6a98a412cd26ffdd0230aa'
 API_SECRET_KEY = '119632d9c3fb449d982d27f29b37dbd1'
 ACCESS_TOKEN = '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'
@@ -21,12 +21,18 @@ SHOP_NAME = 'jack-store1708.myshopify.com'
 # Endpoint base de la API de Shopify
 BASE_URL = f'https://{SHOP_NAME}/admin/api/2023-07/'
 
+#Clase producto
 class ProductView(View):
+
+    #desactivar la protección CSRF (Cross-Site Request Forgery) para la vista
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request,*args, **kwargs)
     
+    #Método GET productos BD
     def get(self, request, id=0):
+
+        #Get por ID
         if (id>0):
             productos=list(Producto.objects.filter(id=id).values())
             if len(productos)>0:
@@ -36,6 +42,7 @@ class ProductView(View):
                 datos={'message':"Products not found..."}
             return JsonResponse(datos)
         else:
+            #Get todos productos BD
             productos=list(Producto.objects.values())
             if len(productos)>0:
                 datos={'message':"Success", 'productos':productos}
@@ -43,13 +50,14 @@ class ProductView(View):
                 datos={'message':"Products not found..."}
             return JsonResponse(datos)
     
+    #Método Post
     def post(self, request):
         #print(request.body)
         jd=json.loads(request.body)
         atributos=list(Atributos.objects.filter(id_atributo=jd["id_atributo_id"]).values())
 
         atributo=atributos[0]
-                
+        #Producto a subir a Shopify      
         shopify_product_data = {
            
 			"title": jd['name'],
@@ -72,7 +80,7 @@ class ProductView(View):
             ]
         }
         
-        
+        #Crear producto en BD
         Producto.objects.create(
             
 			id=jd['id'],
@@ -101,7 +109,7 @@ class ProductView(View):
         headers = {
             'X-Shopify-Access-Token': ACCESS_TOKEN,
         }
-
+        #Crear producto en Shopify
         response = requests.post(url, json={'product': shopify_product_data}, headers=headers)
 
         if response.status_code == 201:
@@ -111,11 +119,12 @@ class ProductView(View):
             datos={'message':"Shopify Connection not found...", "response":response}
             return JsonResponse(datos)
 
-
+    #Método PUT BD
     def put(self, request, id):
         
         jd=json.loads(request.body)
-        
+
+        #Actualización de producto en BD
         productos=list(Producto.objects.filter(id=id).values())
         if len(productos)>0:
             producto = Producto.objects.get(id=id)
@@ -146,7 +155,7 @@ class ProductView(View):
             datos={'message':"Products not found..."}
         return JsonResponse(datos)
     
-    
+    #Delete producto BD
     def delete(self, request, id):
         productos=list(Producto.objects.filter(id=id).values())
         if len(productos)>0:
@@ -155,17 +164,21 @@ class ProductView(View):
         else:
             datos={'message':"Products not found..."}
         return JsonResponse(datos)
-    
+
+#Clase Shopify
 class ShopifyView(View):
+
+    #desactivar la protección CSRF (Cross-Site Request Forgery) para la vista
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request,*args, **kwargs)
     
+    #Método Get para productos en Shopify
     def get(self, request, id=0):
         headers = {
             'X-Shopify-Access-Token': ACCESS_TOKEN,
             }
-        
+        #Get producto por Id Shopify
         if (id>0):
             url = BASE_URL + f'products/{id}.json'
             response = requests.get(url, headers=headers)
@@ -181,6 +194,7 @@ class ShopifyView(View):
                return JsonResponse(datos)
         
         else:
+            #Get todos los productos de Shopify
             url = BASE_URL + 'products.json'
             response = requests.get(url, headers=headers)
 
@@ -191,7 +205,7 @@ class ShopifyView(View):
                 datos={'message':"Products not found Shopify..."}
                 return JsonResponse(datos)
             
-    
+    #Método delete Shopify
     def delete(self, request, id):
         url = BASE_URL + f'products/{id}.json'
         headers = {
@@ -210,13 +224,15 @@ class ShopifyView(View):
             datos={'message':"Error al eliminar el producto de Shopify..."}
             return JsonResponse(datos)
     
-
+    #Método update Shopify
     def put(self, request, id):
         url = BASE_URL + f'products/{id}.json'
         headers = {
             'X-Shopify-Access-Token': ACCESS_TOKEN,
         }
         jd=json.loads(request.body)
+
+        #Actualización de producto
         shopify_product_data = {
                 "id": jd['id'],
                 "title": jd['title'],
@@ -237,22 +253,31 @@ class ShopifyView(View):
                 "images": jd['images'],
                 "image": jd['image']
             }
-
+        
+        #Método put con producto actualizado en Shopify
         response = requests.put(url, json={'product': shopify_product_data}, headers=headers)
 
         if response.status_code == 200:
             data = response.json()
+
+            #CREACIÓN DE WEBHOOKS PARA ACTUALIZACIÓN DE PRODUCTO EN SHOPIFY
             urlW = BASE_URL + 'webhooks.json'
             webhook = {
                     "topic": 'products/update',
+
+                     #ADDRESS CREADO CON SERVIDOR LOCAL XAMPP Y TUNEL NGROK
                     "address": 'https://cf53-191-99-151-224.ngrok.io/urls.py',
                     "format": "json"
 
             }
+
+            #POST Webhook creado
             responseW = requests.post(urlW, json={'webhook':webhook}, headers=headers)
             if responseW.ok:
                 try:
                     dataW = responseW.json()
+
+                    #DEVOLVEMOS MENSAJE DE SUCCESS, EL PRODUCTO ACTUALIZADO Y EL WEBHOOK CREADO
                     datos={'message':"Success","product":data['product'], "webhook":dataW['webhook']}
                     return JsonResponse(datos)
                 except requests.exceptions.JSONDecodeError:
@@ -272,16 +297,20 @@ class ShopifyView(View):
             
 
 class importarProductos(View):  
+    #desactivar la protección CSRF (Cross-Site Request Forgery) para la vista
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request,*args, **kwargs)
-            
+
+    #MÉTODO POST PARA MIGRAR TODOS LOS PRODUCTOS DE BASE DE DATOS A SHOPIFY        
     def post(self, request):
 
         productos=list(Producto.objects.values())
 
         if len(productos)>0:
          conteo = 0
+
+         #POST PRODUCTO POR PRODUCTO
          for producto in productos:
                 shopify_product_data = {
                 
@@ -331,13 +360,14 @@ class importarProductos(View):
      
 
 class AtributosView(View):
-
+        #desactivar la protección CSRF (Cross-Site Request Forgery) para la vista
         @method_decorator(csrf_exempt)
         def dispatch(self, request, *args, **kwargs):
             return super().dispatch(request,*args, **kwargs)
         
-
+        #MÉTODO GET PARA ATRIBUTOS EN BD
         def get(self, request, id=0):
+            #GET POR ID EN BD
             if (id>0):
                 atributos=list(Atributos.objects.filter(id_atributo=id).values())
                 if len(atributos)>0:
@@ -347,6 +377,7 @@ class AtributosView(View):
                     datos={'message':"Atributos not found..."}
                 return JsonResponse(datos)
             else:
+                #GET TODOS LOS ATRIBUTOS DE BD
                 atributos=list(Atributos.objects.values())
                 if len(atributos)>0:
                     datos={'message':"Success", 'atributos':atributos}
@@ -355,10 +386,13 @@ class AtributosView(View):
                 return JsonResponse(datos)
             
 class WebhooksView(View):
+
+    #desactivar la protección CSRF (Cross-Site Request Forgery) para la vista
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request,*args, **kwargs)
     
+    #Devuelve todos los webhooks creados
     def get(self, request, id=0):
         url = BASE_URL + 'webhooks.json'
         headers = {

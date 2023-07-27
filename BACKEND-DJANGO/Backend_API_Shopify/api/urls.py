@@ -5,6 +5,7 @@ from .views import importarProductos
 from .views import AtributosView
 from .views import WebhooksView
 
+ #URLS API
 urlpatterns=[
     path('products/', ProductView.as_view(),name='product_list'),
     path('products/<int:id>', ProductView.as_view(),name='product_process'),
